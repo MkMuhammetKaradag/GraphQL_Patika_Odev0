@@ -41,8 +41,7 @@ build/Release
 # Dependency directories
 node_modules/
 odev/
-bolum1/
-bolum2/
+bolum*/
 jspm_packages/
 
 

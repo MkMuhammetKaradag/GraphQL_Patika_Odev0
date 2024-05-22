@@ -1,158 +1,148 @@
-import { ApolloServer } from "@apollo/server";
-import { startStandaloneServer } from "@apollo/server/standalone";
 import { ApolloServerPluginLandingPageGraphQLPlayground } from "apollo-server-core";
 import { events, locations, participants, users } from "./data.js";
 import { nanoid } from "nanoid";
-const typeDefs = `#graphql
+import { createServer } from "node:http";
+import {
+  Repeater,
+  createPubSub,
+  createSchema,
+  createYoga,
+  filter,
+  map,
+  pipe,
+} from "graphql-yoga";
 
+import pubSub from "./pubsub.js";
+const typeDefs = /* GraphQL */ `
+  type User {
+    id: ID!
+    username: String!
+    email: String!
+    events: [Event!]!
+  }
+  input CreateUserInput {
+    username: String!
+    email: String!
+  }
+  input UpdateUserInput {
+    username: String
+    email: String
+  }
 
-type User {
-    id:ID!
-    username:String!
-    email:String!
-    events:[Event!]!
-}
-input CreateUserInput{
-  username:String!
-  email:String!
-}
-input UpdateUserInput{
-  username:String
-  email:String
-}
+  type Event {
+    id: ID!
+    title: String!
+    desc: String!
+    date: String!
+    from: String!
+    to: String!
+    location_id: ID!
+    user_id: ID!
+    user: User!
+    location: Location!
+    participants: [Participant!]
+  }
+  input CreateEventInput {
+    title: String!
+    desc: String!
+    date: String!
+    from: String!
+    to: String!
+    location_id: ID!
+    user_id: ID!
+  }
+  input UpdateEventInput {
+    title: String
+    desc: String
+    date: String
+    from: String
+    to: String
+    location_id: ID
+    user_id: ID
+  }
 
+  type Location {
+    id: ID!
+    name: String!
+    desc: String!
+    lat: Float!
+    lng: Float!
+  }
+  input CreateLocationInput {
+    name: String!
+    desc: String!
+    lat: Float!
+    lng: Float!
+  }
+  input UpdateLocationInput {
+    name: String
+    desc: String
+    lat: Float
+    lng: Float
+  }
 
-type Event {
-  id:ID!
-  title:String!
-  desc:String!
-  date:String!
-  from:String!
-  to:String!
-  location_id:ID!
-  user_id:ID!
-  user:User!
-  location:Location!
-  participants:[Participant!]
-}
-input CreateEventInput{
-  title:String!
-  desc:String!
-  date:String!
-  from:String!
-  to:String!
-  location_id:ID!
-  user_id:ID!
-}
-input UpdateEventInput{
-  title:String
-  desc:String
-  date:String
-  from:String
-  to:String
-  location_id:ID
-  user_id:ID
-}
+  type Participant {
+    id: ID!
+    user_id: ID!
+    event_id: ID!
+    event: Event!
+    username: String!
+    user: User!
+  }
 
+  input CreateParticipantInput {
+    user_id: ID!
+    event_id: ID!
+  }
+  input UpdateParticipantInput {
+    user_id: ID
+    event_id: ID
+  }
 
+  type Query {
+    users: [User!]
+    user(id: ID): User
 
+    events: [Event!]
+    event(id: ID): Event
 
+    location(id: ID): Location
+    locations: [Location!]
 
-
-type Location {
-    id:ID!
-    name:String!
-    desc:String!
-    lat:Float!
-    lng:Float!
-   
-}
-input CreateLocationInput{
-  name:String!
-  desc:String!
-  lat:Float!
-  lng:Float!
-}
-input UpdateLocationInput{
-  name:String
-  desc:String
-  lat:Float
-  lng:Float
-}
-
-
-
-
-
-
-
-
-type Participant {
-    id:ID!
-    user_id:ID!
-    event_id:ID!
-    event:Event!
-    username:String!
-    user:User!
-   
-}
-
-input CreateParticipantInput{
-  user_id:ID!
-  event_id:ID!
-}
-input UpdateParticipantInput{
-  user_id:ID
-  event_id:ID
-}
-
-
-
-
-
-  type Query { 
-    users:[User!]
-    user(id:ID):User
-  
-
-    events:[Event!]
-    event(id:ID):Event
-    
-    
-    location(id:ID):Location
-    locations:[Location!]
-
-    participant(id:ID):Participant
-    participants:[Participant!]
-
-    
+    participant(id: ID): Participant
+    participants: [Participant!]
   }
   type DeleteAllOutput {
-    count:Int!
+    count: Int!
   }
-  
+
   type Mutation {
-    createUser(data:CreateUserInput!): User!
-    updateUser(id:ID!,data:UpdateUserInput!): User!
-    deleteUser(id:ID!):User!
-    deleteAllUsers:DeleteAllOutput!
-    
+    createUser(data: CreateUserInput!): User!
+    updateUser(id: ID!, data: UpdateUserInput!): User!
+    deleteUser(id: ID!): User!
+    deleteAllUsers: DeleteAllOutput!
 
-    createEvent(data:CreateEventInput!): Event!
-    updateEvent(id:ID!,data:UpdateEventInput!): Event!
-    deleteEvent(id:ID!):Event!
-    deleteAllEvents:DeleteAllOutput!
+    createEvent(data: CreateEventInput!): Event!
+    updateEvent(id: ID!, data: UpdateEventInput!): Event!
+    deleteEvent(id: ID!): Event!
+    deleteAllEvents: DeleteAllOutput!
 
-    createLocation(data:CreateLocationInput!): Location!
-    updateLocation(id:ID!,data:UpdateLocationInput!): Location!
-    deleteLocation(id:ID!):Location!
-    deleteAllLocations:DeleteAllOutput!
+    createLocation(data: CreateLocationInput!): Location!
+    updateLocation(id: ID!, data: UpdateLocationInput!): Location!
+    deleteLocation(id: ID!): Location!
+    deleteAllLocations: DeleteAllOutput!
 
-    createParticipant(data:CreateParticipantInput!): Participant!
-    updateParticipant(id:ID!,data:UpdateParticipantInput!): Participant!
-    deleteParticipant(id:ID!):Participant!
-    deleteAllParticipants:DeleteAllOutput!
+    createParticipant(data: CreateParticipantInput!): Participant!
+    updateParticipant(id: ID!, data: UpdateParticipantInput!): Participant!
+    deleteParticipant(id: ID!): Participant!
+    deleteAllParticipants: DeleteAllOutput!
+  }
 
+  type Subscription {
+    createUser: User
+    createEvent: Event
+    createLocation: Location
+    createParticipant: Participant
   }
 `;
 
@@ -202,7 +192,7 @@ const resolvers = {
   },
 
   Mutation: {
-    createUser: (parent, args) => {
+    createUser: (parent, args, context) => {
       const user = {
         id: nanoid(),
         ...args.data,
@@ -212,7 +202,7 @@ const resolvers = {
       } catch (error) {
         throw error;
       }
-
+      context.pubSub.publish("createUser", user);
       return user;
     },
     updateUser: (parent, args) => {
@@ -243,7 +233,7 @@ const resolvers = {
       };
     },
 
-    createEvent: (parent, args) => {
+    createEvent: (parent, args, context) => {
       const event = {
         id: nanoid(),
         ...args.data,
@@ -253,7 +243,7 @@ const resolvers = {
       } catch (error) {
         throw error;
       }
-
+      context.pubSub.publish("createEvent", event);
       return event;
     },
     updateEvent: (parent, args) => {
@@ -285,7 +275,7 @@ const resolvers = {
       };
     },
 
-    createLocation: (parent, args) => {
+    createLocation: (parent, args, context) => {
       const location = {
         id: nanoid(),
         ...args.data,
@@ -295,6 +285,7 @@ const resolvers = {
       } catch (error) {
         throw error;
       }
+      context.pubSub.publish("createLocation", location);
 
       return location;
     },
@@ -334,7 +325,7 @@ const resolvers = {
       };
     },
 
-    createParticipant: (parent, args) => {
+    createParticipant: (parent, args, context) => {
       const participant = {
         id: nanoid(),
         ...args.data,
@@ -344,6 +335,7 @@ const resolvers = {
       } catch (error) {
         throw error;
       }
+      context.pubSub.publish("createParticipant", participant);
 
       return participant;
     },
@@ -381,6 +373,32 @@ const resolvers = {
       return {
         count: length,
       };
+    },
+  },
+  Subscription: {
+    createUser: {
+      subscribe: (_, _args, context) => {
+        return context.pubSub.asyncIterator("createUser");
+      },
+      resolve: (payload) => payload,
+    },
+    createEvent: {
+      subscribe: (_, _args, context) => {
+        return context.pubSub.asyncIterator("createEvent");
+      },
+      resolve: (payload) => payload,
+    },
+    createLocation: {
+      subscribe: (_, _args, context) => {
+        return context.pubSub.asyncIterator("createLocation");
+      },
+      resolve: (payload) => payload,
+    },
+    createParticipant: {
+      subscribe: (_, _args, context) => {
+        return context.pubSub.asyncIterator("createParticipant");
+      },
+      resolve: (payload) => payload,
     },
   },
   User: {
@@ -432,13 +450,16 @@ const resolvers = {
   },
 };
 
-const server = new ApolloServer({
-  typeDefs,
-  resolvers,
-  plugins: [ApolloServerPluginLandingPageGraphQLPlayground({})],
-});
-const { url } = await startStandaloneServer(server, {
-  listen: { port: 4000 },
+const yoga = createYoga({
+  schema: createSchema({
+    typeDefs,
+    resolvers,
+  }),
+  context: { pubSub },
+  plugins: [ApolloServerPluginLandingPageGraphQLPlayground({})], // not working
 });
 
-console.log(`🚀  Server ready at: ${url}`);
+const server = createServer(yoga);
+server.listen(4000, () => {
+  console.info("Server is running on http://localhost:4000/graphql");
+});
