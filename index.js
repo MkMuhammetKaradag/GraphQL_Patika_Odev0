@@ -2,17 +2,14 @@ import { ApolloServerPluginLandingPageGraphQLPlayground } from "apollo-server-co
 import { events, locations, participants, users } from "./data.js";
 import { nanoid } from "nanoid";
 import { createServer } from "node:http";
-import {
-  Repeater,
-  createPubSub,
-  createSchema,
-  createYoga,
-  filter,
-  map,
-  pipe,
-} from "graphql-yoga";
+import { createSchema, createYoga, filter, pipe } from "graphql-yoga";
 
 import pubSub from "./pubsub.js";
+
+import { WebSocketServer } from "ws";
+
+import { useServer } from "graphql-ws/lib/use/ws";
+
 const typeDefs = /* GraphQL */ `
   type User {
     id: ID!
@@ -142,10 +139,9 @@ const typeDefs = /* GraphQL */ `
     createUser: User
     createEvent: Event
     createLocation: Location
-    createParticipant: Participant
+    createParticipant(event_id: ID): Participant
   }
 `;
-
 const resolvers = {
   Query: {
     users: () => users,
@@ -395,9 +391,15 @@ const resolvers = {
       resolve: (payload) => payload,
     },
     createParticipant: {
-      subscribe: (_, _args, context) => {
-        return context.pubSub.asyncIterator("createParticipant");
-      },
+      subscribe: (_, args, context) =>
+        pipe(
+          context.pubSub.asyncIterator("createParticipant"),
+          filter((participant) => {
+            console.log("args", args);
+            return args.event_id ? participant.event_id == args.event_id : true;
+          })
+        ),
+
       resolve: (payload) => payload,
     },
   },
@@ -450,16 +452,57 @@ const resolvers = {
   },
 };
 
-const yoga = createYoga({
+const yogaApp = createYoga({
   schema: createSchema({
     typeDefs,
     resolvers,
   }),
   context: { pubSub },
   plugins: [ApolloServerPluginLandingPageGraphQLPlayground({})], // not working
+  graphiql: {
+    subscriptionsProtocol: "WS",
+  },
 });
 
-const server = createServer(yoga);
-server.listen(4000, () => {
-  console.info("Server is running on http://localhost:4000/graphql");
+const httpServer = createServer(yogaApp);
+
+const wsServer = new WebSocketServer({
+  server: httpServer,
+  path: yogaApp.graphqlEndpoint,
+});
+
+useServer(
+  {
+    execute: (args) => args.rootValue.execute(args),
+    subscribe: (args) => args.rootValue.subscribe(args),
+    onSubscribe: async (ctx, msg) => {
+      const { schema, execute, subscribe, contextFactory, parse, validate } =
+        yogaApp.getEnveloped({
+          ...ctx,
+          req: ctx.extra.request,
+          socket: ctx.extra.socket,
+          params: msg.payload,
+        });
+
+      const args = {
+        schema,
+        operationName: msg.payload.operationName,
+        document: parse(msg.payload.query),
+        variableValues: msg.payload.variables,
+        contextValue: await contextFactory(),
+        rootValue: {
+          execute,
+          subscribe,
+        },
+      };
+
+      const errors = validate(args.schema, args.document);
+      if (errors.length) return errors;
+      return args;
+    },
+  },
+  wsServer
+);
+httpServer.listen(4000, () => {
+  console.log("Server is running on port 4000");
 });
