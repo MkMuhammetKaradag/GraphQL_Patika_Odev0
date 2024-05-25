@@ -40,7 +40,7 @@ build/Release
 
 # Dependency directories
 node_modules/
-odev
+
 bolum*/
 jspm_packages/
 src/
