@@ -29,11 +29,13 @@ export const Subscription = {
     resolve: (payload) => payload,
   },
   updateUser: {
-    subscribe: (_, _args, context) => context.pubSub.subscribe("updateUser"),
+    subscribe: (_, _args, context) =>
+      context.pubSub.asyncIterator("updateUser"),
     resolve: (payload) => payload,
   },
   deleteUser: {
-    subscribe: (_, _args, context) => context.pubSub.subscribe("deleteUser"),
+    subscribe: (_, _args, context) =>
+      context.pubSub.asyncIterator("deleteUser"),
     resolve: (payload) => payload,
   },
   createPost: {
@@ -41,12 +43,12 @@ export const Subscription = {
       pipe(
         context.pubSub.asyncIterator("createPost"),
         filter((post) => {
-          console.log("post", post);
-          return args.userId ? post.userId == args.userId : true;
+          // console.log("post", "dinledim seni ");
+          return args.userId ? post.user == args.userId : true;
         })
       ),
     resolve: (payload) => {
-      console.log("payload:", payload);
+      // console.log("payload:", payload);
       return payload;
     },
   },
@@ -55,14 +57,16 @@ export const Subscription = {
     resolve: (payload) => payload,
   },
   deletePost: {
-    subscribe: (_, _args, context) => context.pubSub.subscribe("deletePost"),
+    subscribe: (_, _args, context) =>
+      context.pubSub.asyncIterator("deletePost"),
     resolve: (payload) => payload,
   },
 
   countPost: {
-    subscribe: (_, _args, context) => {
+    subscribe: async (_, _args, context) => {
+      const post_count = await context._db.Post.countDocuments();
       setTimeout(() => {
-        context.pubSub.publish("countPost", posts.length);
+        context.pubSub.publish("countPost", post_count);
       }, 100);
       return context.pubSub.asyncIterator("countPost");
     },
@@ -73,17 +77,19 @@ export const Subscription = {
       pipe(
         context.pubSub.asyncIterator("createComment"),
         filter((comment) => {
-          return args.postId ? comment.postId == args.postId : true;
+          return args.postId ? comment.post == args.postId : true;
         })
       ),
     resolve: (payload) => payload,
   },
   updateComment: {
-    subscribe: (_, _args, context) => context.pubSub.subscribe("updateComment"),
+    subscribe: (_, _args, context) =>
+      context.pubSub.asyncIterator("updateComment"),
     resolve: (payload) => payload,
   },
   deleteComment: {
-    subscribe: (_, _args, context) => context.pubSub.subscribe("deleteComment"),
+    subscribe: (_, _args, context) =>
+      context.pubSub.asyncIterator("deleteComment"),
     resolve: (payload) => payload,
   },
   // globalCounter: {

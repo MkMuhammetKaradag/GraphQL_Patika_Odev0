@@ -6,7 +6,7 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "start": "node index.js",
-    "dev": " nodemon index.js"
+    "dev": " nodemon odev/index.js"
   },
   "keywords": [],
   "author": "",
@@ -23,6 +23,7 @@
     "graphql-ws": "^5.16.0",
     "graphql-yoga": "^5.3.1",
     "ioredis": "^5.4.1",
+    "mongoose": "^8.4.0",
     "nanoid": "^5.0.7",
     "ws": "^8.17.0"
   },

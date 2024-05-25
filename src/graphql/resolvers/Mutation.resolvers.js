@@ -1,3 +1,4 @@
+import mongoose from "mongoose";
 import { comments, posts, users } from "../../data.js";
 
 import { nanoid } from "nanoid";
@@ -8,13 +9,13 @@ export const Mutation = {
   //   return globalCounter;
   // },
 
-  createUser: (parent, args, context) => {
-    const user = {
-      id: nanoid(),
+  createUser: async (parent, args, context) => {
+    const newUser = new context._db.User({
       ...args.data,
-    };
+    });
+    const user = await newUser.save();
     try {
-      users.push(user);
+      // users.push(user);
     } catch (error) {
       throw error;
     }
@@ -23,128 +24,172 @@ export const Mutation = {
     return user;
   },
 
-  updateUser: (parent, args, context) => {
-    const user_index = users.findIndex((user) => user.id == args.id);
-    if (user_index == -1) {
-      throw new Error("user not found");
+  updateUser: async (parent, args, context) => {
+    // const user_index = users.findIndex((user) => user.id == args.id);
+    try {
+      const is_user_exist = context._db.User.findById(args.id);
+      if (!is_user_exist) {
+        throw new Error("user not found");
+      }
+      const update_user = await context._db.User.findByIdAndUpdate(
+        args.id,
+        args.data,
+        { new: true }
+      );
+      context.pubSub.publish("updateUser", update_user);
+      return update_user;
+    } catch (error) {
+      console.log(error);
     }
-    users[user_index] = { ...users[user_index], ...args.data };
-    context.pubSub.publish("updateUser", users[user_index]);
-    return users[user_index];
   },
 
-  deleteUser: (parent, args, context) => {
-    const user_index = users.findIndex((user) => user.id == args.id);
-    if (user_index == -1) {
-      throw new Error("user not found");
+  deleteUser: async (parent, args, context) => {
+    try {
+      const is_user_exist = context._db.User.findById(args.id);
+      if (!is_user_exist) {
+        throw new Error("user not found");
+      }
+      const delete_user = await context._db.User.findByIdAndDelete(args.id);
+      context.pubSub.publish("deleteUser", delete_user);
+      return delete_user;
+    } catch (error) {
+      console.log(error);
     }
-    const delete_user = users[user_index];
-
-    users.splice(user_index, 1);
-    context.pubSub.publish("deleteUser", delete_user);
-
-    return delete_user;
   },
 
-  deleteAllUsers: () => {
-    const length = users.length;
-    users.splice(0, length);
+  deleteAllUsers: async (_, __, context) => {
+    const delete_users = await context._db.User.deleteMany({});
 
     return {
-      count: length,
+      count: delete_users.deletedCount,
     };
   },
-  createPost: (parent, args, context) => {
-    const post = {
-      id: nanoid(),
+  createPost: async (parent, args, context) => {
+    const newPost = new context._db.Post({
       ...args.data,
-    };
-    try {
-      posts.unshift(post);
-    } catch (error) {
-      throw error;
-    }
+    });
+    const post = await newPost.save();
+    const user = await context._db.User.findById(
+      new mongoose.Types.ObjectId(args.data.user)
+    );
+    user.posts.push(post.id);
+
+    user.save();
+    const post_count = await context._db.Post.countDocuments();
+
     context.pubSub.publish("createPost", post);
-    context.pubSub.publish("countPost", posts.length);
+    context.pubSub.publish("countPost", post_count);
     return post;
   },
 
-  updatePost: (parent, args, context) => {
-    const post_index = posts.findIndex((post) => post.id == args.id);
-    if (post_index == -1) {
-      throw new Error("post not found");
-    }
-    posts[post_index] = { ...posts[post_index], ...args.data };
-    context.pubSub.publish("updatePost", posts[post_index]);
-
-    return posts[post_index];
-  },
-
-  deletePost: (parent, args, context) => {
-    const post_index = posts.findIndex((post) => post.id == args.id);
-    if (post_index == -1) {
-      throw new Error("post not found");
-    }
-    const delete_post = posts[post_index];
-    posts.splice(post_index, 1);
-    context.pubSub.publish("deletePost", delete_post);
-    context.pubSub.publish("countPost", posts.length);
-
-    return delete_post;
-  },
-  deleteAllPosts: (_, _args, context) => {
-    const length = posts.length;
-    posts.splice(0, length);
-    context.pubSub.publish("countPost", posts.length);
-    return {
-      count: length,
-    };
-  },
-  createComment: (parent, args, context) => {
-    const comment = {
-      id: nanoid(),
-      ...args.data,
-    };
+  updatePost: async (parent, args, context) => {
     try {
-      comments.push(comment);
+      const is_post_exist = context._db.Post.findById(args.id);
+      if (!is_post_exist) {
+        throw new Error("post not found");
+      }
+      const update_post = await context._db.Post.findByIdAndUpdate(
+        args.id,
+        args.data,
+        { new: true }
+      );
+      context.pubSub.publish("updatePost", update_post);
+
+      return update_post;
     } catch (error) {
-      throw error;
+      console.log(error);
     }
+  },
+
+  deletePost: async (parent, args, context) => {
+    try {
+      const is_post_exist = await context._db.Post.findById(args.id);
+      if (!is_post_exist) {
+        throw new Error("post not found");
+      }
+      const delete_post = await context._db.Post.findByIdAndDelete(args.id);
+      const post_count = await context._db.Post.countDocuments();
+      // const user = await context._db.User.findById(
+      //   new mongoose.Types.ObjectId(args.data.user)
+      // );
+      // user.posts.push(post.id);
+
+      // user.save();
+
+      context.pubSub.publish("deletePost", delete_post);
+      context.pubSub.publish("countPost", post_count);
+
+      return delete_post;
+    } catch (error) {
+      console.log(error);
+    }
+  },
+  deleteAllPosts: async (_, _args, context) => {
+    const delete_posts = await context._db.Post.deleteMany({});
+    context.pubSub.publish("countPost", 0);
+    return {
+      count: delete_posts.deletedCount,
+    };
+  },
+  createComment: async (parent, args, context) => {
+    const newComment = new context._db.Comment({
+      ...args.data,
+    });
+    const comment = await newComment.save();
+    const post = await context._db.Post.findById(args.data.post);
+    const user = await context._db.User.findById(args.data.user);
+
+    user.comments.push(comment.id);
+
+    post.comments.push(comment.id);
+
+    await user.save();
+    await post.save();
+
     context.pubSub.publish("createComment", comment);
 
     return comment;
   },
-  updateComment: (parent, args, context) => {
-    const comment_index = comments.findIndex(
-      (comment) => comment.id == args.id
-    );
-    if (comment_index == -1) {
-      throw new Error("comment not found");
-    }
-    comments[comment_index] = { ...comments[comment_index], ...args.data };
-    context.pubSub.publish("updateComment", comments[comment_index]);
+  updateComment: async (parent, args, context) => {
+    try {
+      const is_comment_exist = await context._db.Comment.findById(args.id);
+      if (!is_comment_exist) {
+        throw new Error("comment not found");
+      }
+      const update_comment = await context._db.Comment.findByIdAndUpdate(
+        args.id,
+        args.data,
+        { new: true }
+      );
+      context.pubSub.publish("updateComment", update_comment);
 
-    return comments[comment_index];
-  },
-  deleteComment: (parent, args, context) => {
-    const comment_index = comments.findIndex(
-      (comment) => comment.id == args.id
-    );
-    if (comment_index == -1) {
-      throw new Error("comment_index not found");
+      return update_comment;
+    } catch (error) {
+      console.log(error);
     }
-    const delete_comment = comments[comment_index];
-    comments.splice(comment_index, 1);
-    context.pubSub.publish("deleteComment", delete_comment);
-
-    return delete_comment;
   },
-  deleteAllComments: () => {
-    const length = comments.length;
-    comments.splice(0, length);
+  deleteComment: async (parent, args, context) => {
+    try {
+      const is_comment_exist = await context._db.Comment.findById(args.id);
+      if (!is_comment_exist) {
+        throw new Error("post not found");
+      }
+      const delete_comment = await context._db.Comment.findByIdAndDelete(
+        args.id
+      );
+
+      context.pubSub.publish("deleteComment", delete_comment);
+
+      return delete_comment;
+    } catch (error) {
+      console.log(error);
+    }
+  },
+  deleteAllComments: async (_, __, context) => {
+    const delete_comment = await context._db.Comment.deleteMany({});
 
     return {
-      count: length,
+      count: delete_comment.deletedCount,
     };
   },
 };

@@ -40,10 +40,10 @@ build/Release
 
 # Dependency directories
 node_modules/
-odev/
+odev
 bolum*/
 jspm_packages/
-
+src/
 
 *test.json
 
